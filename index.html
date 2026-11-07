@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailMorph — Email Variation Generator</title>
+  <meta name="description" content="Upload a PDF, Excel, CSV, Word, or TXT file of emails—or type an email—to generate smart Gmail & email variations in BCC or list format." />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+          </svg>
+        </div>
+        <div>
+          <h1>MailMorph</h1>
+          <p>Smart Gmail &amp; Email Variation Generator</p>
+        </div>
+      </div>
+
+      <button type="button" id="themeToggleBtn" class="btn btn-icon" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+        <svg id="iconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+        </svg>
+        <svg id="iconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path><path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path><path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- STEP 1: INPUT -->
+    <section class="card" aria-label="Email Input">
+      <div class="card-head">
+        <h2 class="card-title">1. Enter or Upload Emails</h2>
+        <button type="button" id="clearBtn" class="link-btn">Clear all</button>
+      </div>
+
+      <textarea
+        id="emailInput"
+        class="input-textarea"
+        spellcheck="false"
+        placeholder="Type or paste email(s) here...&#10;e.g. Odimegwustanley2004@gmail.com"
+      ></textarea>
+
+      <div class="helper-row">
+        <span id="sourceCounter">0 emails entered</span>
+        <button type="button" id="tryExampleBtn" class="link-btn">Try example</button>
+      </div>
+
+      <div class="divider">OR UPLOAD A FILE</div>
+
+      <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload file of emails">
+        <input
+          type="file"
+          id="fileInput"
+          multiple
+          accept=".txt,.pdf,.csv,.xlsx,.xls,.doc,.docx,.rtf,text/plain,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          hidden
+        />
+        <div class="dropzone-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <p class="dropzone-title">Upload file or drag &amp; drop here</p>
+        <p class="dropzone-sub">Accepts <strong>.pdf, .txt, .csv, .xlsx, .doc, .docx</strong></p>
+      </div>
+
+      <div id="fileList" class="file-list" hidden></div>
+    </section>
+
+    <!-- STEP 2: OUTPUT -->
+    <section class="card" aria-label="Generated Variations">
+      <div class="card-head">
+        <h2 class="card-title">2. Generated Variations</h2>
+        <span id="outputStats" class="stats-pill">0 variations</span>
+      </div>
+
+      <div class="format-bar">
+        <label for="formatSelect">Output Format:</label>
+        <select id="formatSelect" class="select-box">
+          <option value="bcc_comma" selected>BCC Format (Comma-separated)</option>
+          <option value="bcc_semicolon">BCC Format (Semicolon — Outlook)</option>
+          <option value="newline">Plain List (One per line)</option>
+          <option value="csv">CSV Spreadsheet</option>
+        </select>
+      </div>
+
+      <textarea
+        id="outputArea"
+        class="output-textarea"
+        readonly
+        placeholder="Suggested email variations will appear here automatically..."
+      ></textarea>
+
+      <div class="actions-row">
+        <button type="button" id="copyBtn" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span id="copyBtnText">Copy Emails</span>
+        </button>
+
+        <button type="button" id="downloadBtn" class="btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </button>
+
+        <button type="button" id="mailtoBtn" class="btn" title="Open in default mail app with BCC filled">
+          Open in Mail
+        </button>
+      </div>
+
+      <!-- Automatically appears only if > 200 variations exist (helps paste safely into Gmail BCC) -->
+      <div id="batchHelper" class="batch-strip" hidden>
+        <div><strong>Large list detected:</strong> Copy in 100-email batches for Gmail's BCC limit:</div>
+        <div id="batchButtons" class="batch-btns"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Parsers & Engine -->
+  <script src="./vendor/pdf.min.js"></script>
+  <script src="./vendor/xlsx.full.min.js"></script>
+  <script src="./vendor/mammoth.browser.min.js"></script>
+  <script src="./js/lexicon.js"></script>
+  <script src="./js/engine.js"></script>
+  <script src="./js/parsers.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

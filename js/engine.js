@@ -1,10 +1,10 @@
 /**
- * MailMorph — Character-by-Character Email Reduction Engine
+ * MailMorph — Clean Email Reduction Engine
  * Rules:
- *  1. Convert accented / special letters first (e.g. ç → c, é → e, ñ → n, ọ → o).
- *  2. If the email contains '-' or '_', remove '-' and '_' first (one at a time from right to left).
- *  3. Then remove remaining characters one after the other from right to left until 2 characters remain,
- *     and move on to the next email.
+ *  1. Convert accented / special letters (e.g. ç → c, é → e, ñ → n, ọ → o) — never output accented chars.
+ *  2. Remove all symbols (-, _, ., +, etc.) from the username — symbols never appear in outputs.
+ *  3. Remove 1 character (letter or number) at a time from right to left until 2 characters remain,
+ *     then move on to the next email.
  */
 (function (root) {
   'use strict';
@@ -35,40 +35,32 @@
   };
 
   /**
-   * Fold accented letters (e.g. ç -> c, é -> e, ọ -> o) while leaving all ASCII letters, numbers, and symbols untouched.
+   * Convert accented letters (e.g. ç -> c, é -> e, ọ -> o) and strip all symbols so only [a-zA-Z0-9] remain.
    */
-  function normalizeAccents(str) {
-    if (!str) return { normalized: '', replacements: [] };
+  function cleanAndNormalizeLocal(str) {
+    if (!str) return '';
     const composed = str.normalize ? str.normalize('NFC') : str;
-    const replacements = [];
-    const seen = new Set();
     let out = '';
 
     for (const ch of composed) {
-      let mapped = ch;
       if (SPECIAL_CHAR_MAP[ch]) {
-        mapped = SPECIAL_CHAR_MAP[ch];
+        out += SPECIAL_CHAR_MAP[ch];
       } else if (ch.charCodeAt(0) > 127) {
-        mapped = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        out += ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      } else {
+        out += ch;
       }
-
-      if (mapped !== ch && /^[a-zA-Z]+$/.test(mapped)) {
-        const tag = ch + ' → ' + mapped;
-        if (!seen.has(tag)) {
-          seen.add(tag);
-          replacements.push(tag);
-        }
-      }
-      out += mapped;
     }
 
-    out = out.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return { normalized: out, replacements: replacements };
+    // Strip any lingering diacritics and remove ALL symbols/non-alphanumeric characters
+    return out
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '');
   }
 
   /**
    * Extract email addresses from free text, spreadsheets, PDFs, or Word documents.
-   * Preserves symbols (_, -, ., +, etc.) in the local-part intact.
    */
   function extractEmailsFromText(rawText) {
     if (!rawText || typeof rawText !== 'string') return [];
@@ -109,9 +101,8 @@
 
   /**
    * Generate email variations:
-   *  - Normalize accented letters (ç -> c) first
-   *  - Remove '-' and '_' first before removing letters/numbers
-   *  - Remove remaining characters one after the other down to 2 characters
+   *  - Convert accented letters (ç -> c) and strip all symbols first (never included in outputs)
+   *  - Remove 1 character at a time from right to left until 2 characters remain
    */
   function generateVariationsForEmail(inputEmail) {
     const trimmed = (inputEmail || '').trim();
@@ -126,22 +117,21 @@
       domain = Lexicon.DOMAIN_TYPO_MAP[domain];
     }
 
-    const accentRes = normalizeAccents(rawLocal);
-    const currentChars = Array.from(accentRes.normalized.replace(/\s+/g, ''));
-
-    if (currentChars.length === 0) {
+    const cleanBase = cleanAndNormalizeLocal(rawLocal);
+    if (!cleanBase) {
       return { source: trimmed, valid: false, variations: [] };
     }
 
     const variations = [];
-    const seenLocals = new Set();
-
-    function pushLocal(charsArr) {
-      const loc = charsArr.join('');
-      if (!loc) return;
-      const key = loc.toLowerCase();
-      if (!seenLocals.has(key)) {
-        seenLocals.add(key);
+    if (cleanBase.length <= MIN_CHARS) {
+      variations.push({
+        email: cleanBase + '@' + domain,
+        local: cleanBase,
+        domain: domain
+      });
+    } else {
+      for (let len = cleanBase.length; len >= MIN_CHARS; len--) {
+        const loc = cleanBase.slice(0, len);
         variations.push({
           email: loc + '@' + domain,
           local: loc,
@@ -150,34 +140,9 @@
       }
     }
 
-    // Emit initial (accent-normalized) email
-    pushLocal(currentChars);
-
-    // Step 1: Remove '-' and '_' first (one at a time from right to left) while length > MIN_CHARS
-    while (currentChars.length > MIN_CHARS) {
-      let symIdx = -1;
-      for (let i = currentChars.length - 1; i >= 0; i--) {
-        if (currentChars[i] === '-' || currentChars[i] === '_') {
-          symIdx = i;
-          break;
-        }
-      }
-      if (symIdx === -1) break;
-      currentChars.splice(symIdx, 1);
-      pushLocal(currentChars);
-    }
-
-    // Step 2: Remove remaining characters one after the other from right to left until 2 characters remain
-    if (currentChars.length > MIN_CHARS) {
-      for (let len = currentChars.length - 1; len >= MIN_CHARS; len--) {
-        pushLocal(currentChars.slice(0, len));
-      }
-    }
-
     return {
       source: trimmed,
       valid: true,
-      accentReplacements: accentRes.replacements,
       variations: variations
     };
   }
@@ -264,7 +229,7 @@
 
   const api = {
     MIN_CHARS: MIN_CHARS,
-    normalizeAccents: normalizeAccents,
+    cleanAndNormalizeLocal: cleanAndNormalizeLocal,
     extractEmailsFromText: extractEmailsFromText,
     generateVariationsForEmail: generateVariationsForEmail,
     processEmailBatch: processEmailBatch,

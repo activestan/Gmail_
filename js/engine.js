@@ -2,9 +2,9 @@
  * MailMorph — Character-by-Character Email Reduction Engine
  * Rules:
  *  1. Convert accented / special letters first (e.g. ç → c, é → e, ñ → n, ọ → o).
- *  2. Treat letters, numbers, and symbols identically as characters.
- *  3. Remove 1 character at a time from right to left until 2 characters remain (no artificial cap),
- *     then move to the next email.
+ *  2. If the email contains '-' or '_', remove '-' and '_' first (one at a time from right to left).
+ *  3. Then remove remaining characters one after the other from right to left until 2 characters remain,
+ *     and move on to the next email.
  */
 (function (root) {
   'use strict';
@@ -13,7 +13,7 @@
     DOMAIN_TYPO_MAP: {}
   });
 
-  const MIN_CHARS = 2; // Reduce 1 character at a time until 2 characters remain
+  const MIN_CHARS = 2; // Reduce until 2 characters remain
 
   // Non-NFD character folding map (European, Turkish, Nordic, Nigerian/African hooked letters)
   const SPECIAL_CHAR_MAP = {
@@ -85,7 +85,6 @@
     const seen = new Set();
 
     for (let raw of matches) {
-      // Only strip trailing punctuation after the domain TLD (e.g. a sentence period after @gmail.com.)
       raw = raw.replace(/[.,;:!?]+$/g, '').trim();
       const atIdx = raw.lastIndexOf('@');
       if (atIdx <= 0) continue;
@@ -109,8 +108,10 @@
   }
 
   /**
-   * Generate 1-character-at-a-time reductions from right to left until 2 characters remain.
-   * Letters, numbers, and symbols are all treated identically as characters.
+   * Generate email variations:
+   *  - Normalize accented letters (ç -> c) first
+   *  - Remove '-' and '_' first before removing letters/numbers
+   *  - Remove remaining characters one after the other down to 2 characters
    */
   function generateVariationsForEmail(inputEmail) {
     const trimmed = (inputEmail || '').trim();
@@ -125,27 +126,51 @@
       domain = Lexicon.DOMAIN_TYPO_MAP[domain];
     }
 
-    // 1. Fold accented letters (e.g. ç -> c) first, keeping all ASCII letters, digits, and symbols intact
     const accentRes = normalizeAccents(rawLocal);
-    const baseChars = Array.from(accentRes.normalized.replace(/\s+/g, ''));
+    const currentChars = Array.from(accentRes.normalized.replace(/\s+/g, ''));
 
-    if (baseChars.length === 0) {
+    if (currentChars.length === 0) {
       return { source: trimmed, valid: false, variations: [] };
     }
 
-    // 2. Remove 1 character (letter, digit, or symbol) at a time down to 2 characters
     const variations = [];
-    if (baseChars.length <= MIN_CHARS) {
-      const loc = baseChars.join('');
-      variations.push({ email: loc + '@' + domain, local: loc, domain: domain });
-    } else {
-      for (let len = baseChars.length; len >= MIN_CHARS; len--) {
-        const loc = baseChars.slice(0, len).join('');
+    const seenLocals = new Set();
+
+    function pushLocal(charsArr) {
+      const loc = charsArr.join('');
+      if (!loc) return;
+      const key = loc.toLowerCase();
+      if (!seenLocals.has(key)) {
+        seenLocals.add(key);
         variations.push({
           email: loc + '@' + domain,
           local: loc,
           domain: domain
         });
+      }
+    }
+
+    // Emit initial (accent-normalized) email
+    pushLocal(currentChars);
+
+    // Step 1: Remove '-' and '_' first (one at a time from right to left) while length > MIN_CHARS
+    while (currentChars.length > MIN_CHARS) {
+      let symIdx = -1;
+      for (let i = currentChars.length - 1; i >= 0; i--) {
+        if (currentChars[i] === '-' || currentChars[i] === '_') {
+          symIdx = i;
+          break;
+        }
+      }
+      if (symIdx === -1) break;
+      currentChars.splice(symIdx, 1);
+      pushLocal(currentChars);
+    }
+
+    // Step 2: Remove remaining characters one after the other from right to left until 2 characters remain
+    if (currentChars.length > MIN_CHARS) {
+      for (let len = currentChars.length - 1; len >= MIN_CHARS; len--) {
+        pushLocal(currentChars.slice(0, len));
       }
     }
 
@@ -158,7 +183,7 @@
   }
 
   /**
-   * Process a batch of emails sequentially: reduce email #1 down to 2 chars, then email #2 down to 2 chars, etc.
+   * Process a batch of emails sequentially: finish all reductions for email #1, then move to email #2, etc.
    */
   function processEmailBatch(emails) {
     const results = [];
